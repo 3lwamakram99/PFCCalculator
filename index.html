@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PFCBase · Power Factor Correction Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;600;700;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #030608;
+      --surface:   #070d12;
+      --card:      #0b1318;
+      --card2:     #0f1a20;
+      --border:    #112233;
+      --accent:    #00ffcc;
+      --accent2:   #ff6b00;
+      --accent3:   #7b2fff;
+      --yellow:    #ffe600;
+      --danger:    #ff3355;
+      --text:      #c8e8e0;
+      --muted:     #2a5a50;
+      --glow-c:    rgba(0,255,204,.18);
+      --glow-o:    rgba(255,107,0,.18);
+      --glow-p:    rgba(123,47,255,.18);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Rajdhani', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated background ── */
+    .bg-layer {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 50% at 5%  10%, rgba(0,255,204,.05) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 40% at 95% 90%, rgba(123,47,255,.05) 0%, transparent 65%),
+        radial-gradient(ellipse 40% 30% at 50% 50%, rgba(255,107,0,.03)  0%, transparent 55%);
+    }
+
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,255,204,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,204,.025) 1px, transparent 1px);
+      background-size: 36px 36px;
+    }
+
+    /* ── Layout ── */
+    .wrap {
+      position: relative; z-index: 1;
+      max-width: 660px; margin: 0 auto;
+      padding: 50px 20px 100px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center; margin-bottom: 40px;
+      animation: fadeDown .65s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    .logo-wrap {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 88px; height: 88px; position: relative; margin-bottom: 18px;
+    }
+
+    /* Sine wave ring SVG */
+    .logo-ring-svg {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      animation: rotateSlow 10s linear infinite;
+    }
+
+    .logo-core {
+      position: relative; z-index: 1;
+      width: 58px; height: 58px;
+      background: var(--surface);
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 20px var(--glow-c), inset 0 0 12px rgba(0,255,204,.06);
+    }
+    .logo-core svg { width: 28px; height: 28px; }
+
+    h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: clamp(1.8rem, 6vw, 2.8rem);
+      letter-spacing: 2px; line-height: 1;
+      color: var(--text);
+    }
+    h1 em { font-style: normal; color: var(--accent); }
+
+    .tagline {
+      margin-top: 9px; font-size: .72rem; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--muted); font-weight: 500;
+    }
+
+    .base-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      margin-top: 14px;
+      background: rgba(0,255,204,.06);
+      border: 1px solid rgba(0,255,204,.18);
+      border-radius: 99px; padding: 5px 16px;
+      font-size: .65rem; color: var(--accent);
+      letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
+    }
+    .base-badge::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 8px var(--accent);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    /* ── Wallet Bar ── */
+    .wallet-bar {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 13px 18px; margin-bottom: 10px;
+      animation: fadeUp .55s .1s cubic-bezier(.22,1,.36,1) both;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border); flex-shrink: 0;
+      transition: background .4s, box-shadow .4s;
+    }
+    .status-dot.on {
+      background: var(--accent); box-shadow: 0 0 10px var(--accent);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    .wallet-info { flex: 1; min-width: 0; }
+    .wallet-label { font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-weight: 600; margin-bottom: 2px; }
+    .wallet-addr {
+      font-size: .72rem; color: var(--muted);
+      font-family: 'Share Tech Mono', monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      transition: color .3s;
+    }
+    .wallet-addr.connected { color: var(--accent); }
+
+    #connectBtn {
+      flex-shrink: 0; background: var(--accent); color: #000;
+      border: none; border-radius: 8px; padding: 9px 18px;
+      font-family: 'Rajdhani', sans-serif; font-size: .78rem; font-weight: 700;
+      cursor: pointer; transition: all .2s; white-space: nowrap;
+      box-shadow: 0 4px 16px var(--glow-c); letter-spacing: .04em;
+    }
+    #connectBtn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px var(--glow-c); }
+    #connectBtn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    /* ── Sign Panel ── */
+    .sign-panel {
+      display: none; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px 20px; margin-bottom: 20px;
+      animation: fadeUp .4s cubic-bezier(.22,1,.36,1) both;
+    }
+    .sign-panel.visible { display: block; }
+
+    .sign-title {
+      font-size: .6rem; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--muted); font-weight: 600; margin-bottom: 12px;
+    }
+
+    #signBtn {
+      width: 100%; background: transparent;
+      border: 1px solid var(--accent); border-radius: 8px;
+      color: var(--accent); font-family: 'Rajdhani', sans-serif;
+      font-size: .8rem; font-weight: 700; padding: 11px;
+      cursor: pointer; transition: all .2s; margin-bottom: 14px; letter-spacing: .04em;
+    }
+    #signBtn:hover { background: var(--accent); color: #000; box-shadow: 0 4px 16px var(--glow-c); }
+    #signBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .sig-box {
+      display: none; background: var(--card2);
+      border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+    }
+    .sig-box.visible { display: block; animation: popIn .4s cubic-bezier(.34,1.56,.64,1) both; }
+
+    .sig-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+    .sig-row:last-child { margin-bottom: 0; }
+    .sig-key { font-size: .58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; padding-top: 2px; min-width: 55px; font-weight: 600; }
+    .sig-val { font-size: .68rem; color: var(--accent); word-break: break-all; line-height: 1.6; flex: 1; font-family: 'Share Tech Mono', monospace; }
+    .sig-val.hash { color: var(--accent3); }
+
+    .copy-btn {
+      flex-shrink: 0; background: var(--card);
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-family: 'Rajdhani', sans-serif;
+      font-size: .62rem; font-weight: 600;
+      padding: 3px 8px; cursor: pointer; transition: all .15s; white-space: nowrap;
+    }
+    .copy-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+
+    .basescan-verify-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 12px; width: 100%; justify-content: center;
+      background: rgba(0,255,204,.05); border: 1px solid rgba(0,255,204,.18);
+      border-radius: 8px; padding: 9px;
+      font-size: .68rem; font-weight: 600; color: var(--accent);
+      text-decoration: none; transition: all .2s;
+    }
+    .basescan-verify-link:hover { background: rgba(0,255,204,.12); }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 18px; padding: 28px 26px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.6);
+      position: relative; overflow: hidden; margin-bottom: 16px;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: .5;
+    }
+    .card-anim { animation: fadeUp .55s .2s cubic-bezier(.22,1,.36,1) both; }
+
+    .card-title {
+      font-family: 'Orbitron', sans-serif; font-weight: 700;
+      font-size: .85rem; margin-bottom: 24px;
+      display: flex; align-items: center; gap: 10px;
+      color: var(--accent); letter-spacing: .06em; text-transform: uppercase;
+    }
+    .card-icon {
+      width: 34px; height: 34px;
+      background: rgba(0,255,204,.08); border: 1px solid rgba(0,255,204,.18);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── Phase Selector ── */
+    .phase-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
+
+    .phase-btn {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 12px; padding: 18px 12px;
+      cursor: pointer; text-align: center; transition: all .2s;
+      color: var(--muted); font-family: 'Rajdhani', sans-serif;
+    }
+    .phase-btn:hover { border-color: var(--accent); }
+    .phase-btn.active {
+      background: rgba(0,255,204,.06); border-color: var(--accent);
+      color: var(--text); box-shadow: 0 0 20px var(--glow-c);
+    }
+    .phase-icon { font-size: 1.8rem; margin-bottom: 6px; display: block; }
+    .phase-name { font-size: .9rem; font-weight: 700; display: block; letter-spacing: .04em; }
+    .phase-volt { font-size: .65rem; color: var(--muted); margin-top: 3px; display: block; }
+    .phase-btn.active .phase-volt { color: var(--accent); }
+
+    /* ── Fields ── */
+    .field { margin-bottom: 18px; }
+    label {
+      display: block; font-size: .62rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 7px;
+    }
+
+    .input-wrap { position: relative; }
+    .input-unit {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      font-size: .78rem; color: var(--muted); pointer-events: none;
+      font-weight: 700; font-family: 'Share Tech Mono', monospace;
+    }
+
+    input[type=number] {
+      width: 100%; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); font-family: 'Share Tech Mono', monospace;
+      font-size: 1.3rem; padding: 13px 60px 13px 16px; outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      -moz-appearance: textfield;
+    }
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    input:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow-c);
+    }
+
+    /* Two-col grid for inputs */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── PF Slider ── */
+    .pf-row { display: flex; align-items: center; gap: 12px; }
+    .pf-row input[type=range] {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 4px; border-radius: 2px; font-size: unset; padding: 0;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--border) 0%);
+      outline: none; border: none;
+    }
+    .pf-row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 8px var(--glow-c); cursor: pointer;
+    }
+    .pf-display {
+      font-family: 'Share Tech Mono', monospace; font-size: 1.1rem;
+      color: var(--accent); min-width: 50px; text-align: right;
+    }
+
+    /* ── Target PF row ── */
+    .target-row { display: flex; align-items: center; gap: 12px; }
+    .target-row input[type=range] {
+      flex: 1; -webkit-appearance: none; appearance: none;
+      height: 4px; border-radius: 2px; padding: 0; font-size: unset;
+      background: linear-gradient(90deg, var(--accent2) 0%, var(--border) 0%);
+      outline: none; border: none;
+    }
+    .target-row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--accent2);
+      box-shadow: 0 0 8px var(--glow-o); cursor: pointer;
+    }
+    .target-display {
+      font-family: 'Share Tech Mono', monospace; font-size: 1.1rem;
+      color: var(--accent2); min-width: 50px; text-align: right;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px; background: var(--border); margin: 20px 0;
+      position: relative;
+    }
+    .divider::after {
+      content: attr(data-label);
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      background: var(--card); padding: 0 12px;
+      font-size: .6rem; font-weight: 700; letter-spacing: .14em;
+      color: var(--muted); white-space: nowrap;
+    }
+
+    /* ── Calculate Button ── */
+    #calcBtn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent) 0%, #00ccaa 100%);
+      color: #000; border: none; border-radius: 12px; padding: 18px;
+      font-family: 'Orbitron', sans-serif; font-size: .9rem; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      cursor: pointer; transition: all .2s;
+      box-shadow: 0 6px 24px var(--glow-c);
+    }
+    #calcBtn:hover { transform: translateY(-2px); box-shadow: 0 12px 36px var(--glow-c); }
+    #calcBtn:active { transform: none; }
+    #calcBtn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-inner { display: flex; align-items: center; justify-content: center; gap: 10px; }
+
+    /* ── Result Card ── */
+    #resultCard { display: none; animation: popIn .5s cubic-bezier(.34,1.56,.64,1) both; }
+
+    .result-header {
+      font-family: 'Orbitron', sans-serif; font-weight: 700;
+      font-size: .75rem; color: var(--accent); text-transform: uppercase;
+      letter-spacing: .1em; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .result-header::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 8px var(--accent);
+      animation: blink 1.5s ease-in-out infinite;
+    }
+
+    /* ── Big hero number ── */
+    .hero-result {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 24px;
+      text-align: center; margin-bottom: 16px;
+      position: relative; overflow: hidden;
+    }
+    .hero-result::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent3), transparent);
+    }
+    .hero-bg-text {
+      position: absolute; font-family: 'Orbitron', sans-serif; font-weight: 900;
+      font-size: 8rem; color: rgba(0,255,204,.03); right: -10px; bottom: -20px;
+      line-height: 1; pointer-events: none; letter-spacing: -4px;
+    }
+
+    .hero-label { font-size: .6rem; color: var(--muted); letter-spacing: .18em; text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
+    .hero-banks {
+      font-family: 'Orbitron', sans-serif; font-weight: 900;
+      font-size: clamp(3rem, 12vw, 5.5rem);
+      color: var(--accent); line-height: 1;
+      text-shadow: 0 0 40px var(--glow-c);
+    }
+    .hero-banks span { font-size: .35em; color: var(--muted); }
+    .hero-sub { font-size: .8rem; color: var(--muted); margin-top: 8px; font-weight: 500; }
+
+    /* ── Capacitor visual ── */
+    .cap-visual {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      justify-content: center; margin: 16px 0;
+    }
+    .cap-unit {
+      display: flex; gap: 4px; align-items: center;
+      background: rgba(0,255,204,.06); border: 1px solid rgba(0,255,204,.15);
+      border-radius: 8px; padding: 6px 10px;
+      font-size: .65rem; color: var(--accent);
+      font-family: 'Share Tech Mono', monospace;
+      animation: popIn .3s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    .cap-unit .cap-icon { font-size: .9rem; }
+
+    /* ── Results grid ── */
+    .results-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
+    }
+
+    .res-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 12px;
+      position: relative; overflow: hidden;
+    }
+    .res-box::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .res-box.cyan::before  { background: var(--accent); }
+    .res-box.orange::before{ background: var(--accent2); }
+    .res-box.purple::before{ background: var(--accent3); }
+    .res-box.yellow::before{ background: var(--yellow); }
+    .res-box.full { grid-column: 1 / -1; }
+
+    .res-label { font-size: .58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-weight: 600; margin-bottom: 5px; }
+    .res-value { font-family: 'Share Tech Mono', monospace; font-size: 1.4rem; line-height: 1; }
+    .res-box.cyan   .res-value { color: var(--accent); }
+    .res-box.orange .res-value { color: var(--accent2); }
+    .res-box.purple .res-value { color: var(--accent3); }
+    .res-box.yellow .res-value { color: var(--yellow); }
+    .res-unit { font-size: .62rem; color: var(--muted); margin-top: 3px; font-family: 'Share Tech Mono', monospace; }
+
+    /* ── Step by step breakdown ── */
+    .breakdown {
+      background: rgba(0,255,204,.04); border: 1px solid rgba(0,255,204,.12);
+      border-radius: 12px; padding: 16px;
+    }
+    .breakdown-title {
+      font-size: .62rem; color: var(--accent); text-transform: uppercase;
+      letter-spacing: .12em; font-weight: 600; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .step-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 0; border-bottom: 1px solid var(--border);
+      font-size: .8rem;
+    }
+    .step-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .step-label { color: var(--muted); font-weight: 500; }
+    .step-value { font-family: 'Share Tech Mono', monospace; color: var(--text); font-size: .85rem; }
+    .step-value.hi { color: var(--accent); font-size: .95rem; }
+
+    /* ── Warning ── */
+    .warn-box {
+      background: rgba(255,107,0,.06); border: 1px solid rgba(255,107,0,.2);
+      border-radius: 10px; padding: 12px 16px;
+      font-size: .75rem; color: var(--accent2);
+      line-height: 1.6; margin-top: 12px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .warn-icon { flex-shrink: 0; font-size: 1rem; }
+
+    /* TX Badge */
+    .tx-badge {
+      display: none; margin-top: 14px;
+      background: rgba(0,255,204,.05); border: 1px solid rgba(0,255,204,.18);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: .68rem; color: var(--accent);
+      word-break: break-all; line-height: 1.6;
+      font-family: 'Share Tech Mono', monospace;
+    }
+    .tx-badge a { color: var(--accent); text-decoration: underline; }
+
+    /* ── Owner Section ── */
+    .owner-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px 20px;
+      animation: fadeUp .55s .35s cubic-bezier(.22,1,.36,1) both;
+    }
+    .owner-row { display: flex; align-items: flex-start; gap: 12px; }
+    .owner-icon {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: rgba(0,255,204,.08); border: 1px solid rgba(0,255,204,.18);
+      border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1rem;
+    }
+    .owner-text .ok { font-size: .58rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+    .owner-text .ov { font-size: .7rem; color: var(--accent); word-break: break-all; margin-top: 3px; font-family: 'Share Tech Mono', monospace; }
+    .basescan-link {
+      display: inline-block; margin-top: 8px;
+      font-size: .65rem; font-weight: 600; color: var(--accent);
+      text-decoration: none; border: 1px solid rgba(0,255,204,.2);
+      border-radius: 6px; padding: 4px 10px; transition: all .15s;
+    }
+    .basescan-link:hover { background: rgba(0,255,204,.08); }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center; margin-top: 44px;
+      font-size: .62rem; color: var(--muted);
+      letter-spacing: .1em; text-transform: uppercase; font-weight: 500;
+      animation: fadeUp .55s .5s cubic-bezier(.22,1,.36,1) both;
+    }
+    footer span { color: var(--accent); }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(0,0,0,.3); border-top-color: #000;
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 26px; left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--card2); color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 11px 22px;
+      font-size: .75rem; font-weight: 600;
+      z-index: 999; opacity: 0;
+      transition: transform .32s cubic-bezier(.22,1,.36,1), opacity .3s;
+      white-space: nowrap; pointer-events: none;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.error   { border-color: var(--danger); color: var(--danger); }
+    #toast.success { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Animations ── */
+    @keyframes fadeDown   { from{opacity:0;transform:translateY(-18px)} to{opacity:1;transform:none} }
+    @keyframes fadeUp     { from{opacity:0;transform:translateY(18px)}  to{opacity:1;transform:none} }
+    @keyframes popIn      { from{opacity:0;transform:scale(.93)}         to{opacity:1;transform:none} }
+    @keyframes spin       { to{transform:rotate(360deg)} }
+    @keyframes blink      { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes rotateSlow { to{transform:rotate(360deg)} }
+
+    @media(max-width:500px){
+      .card { padding: 20px 14px; }
+      .two-col { grid-template-columns: 1fr; }
+      .results-grid { grid-template-columns: 1fr; }
+      .res-box.full { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+<div class="bg-grid"></div>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-wrap">
+      <svg class="logo-ring-svg" viewBox="0 0 88 88" fill="none">
+        <circle cx="44" cy="44" r="42" stroke="rgba(0,255,204,.15)" stroke-width="1"/>
+        <path d="M2,44 Q12,20 22,44 Q32,68 42,44 Q52,20 62,44 Q72,68 82,44"
+              stroke="var(--accent)" stroke-width="1.5" fill="none" opacity=".6"/>
+        <circle cx="44" cy="2"  r="3" fill="var(--accent)"/>
+        <circle cx="44" cy="86" r="2" fill="var(--accent)" opacity=".4"/>
+      </svg>
+      <div class="logo-core">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+      </div>
+    </div>
+    <h1><em>PFC</em>Base</h1>
+    <p class="tagline">Power Factor Correction Calculator · On-Chain</p>
+    <div class="base-badge">Base Blockchain · Electrical Engineering</div>
+  </header>
+
+  <!-- Wallet Bar -->
+  <div class="wallet-bar">
+    <div class="status-dot" id="dot"></div>
+    <div class="wallet-info">
+      <div class="wallet-label">Wallet</div>
+      <div class="wallet-addr" id="walletAddr">Not connected</div>
+    </div>
+    <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+  </div>
+
+  <!-- Sign Panel -->
+  <div class="sign-panel" id="signPanel">
+    <div class="sign-title">⚡ Prove Ownership · Sign a Message</div>
+    <button id="signBtn" onclick="signOwnership()">Sign Message with My Wallet</button>
+    <div class="sig-box" id="sigBox">
+      <div class="sig-row">
+        <span class="sig-key">Message</span>
+        <span class="sig-val" id="sigMessage"></span>
+      </div>
+      <div class="sig-row">
+        <span class="sig-key">Wallet</span>
+        <span class="sig-val" id="sigWallet"></span>
+        <button class="copy-btn" onclick="copyText('sigWallet')">Copy</button>
+      </div>
+      <div class="sig-row">
+        <span class="sig-key">Sig Hash</span>
+        <span class="sig-val hash" id="sigHash"></span>
+        <button class="copy-btn" onclick="copyText('sigHash')">Copy</button>
+      </div>
+      <a class="basescan-verify-link" id="bsVerifyLink" href="#" target="_blank" rel="noopener">
+        🔍 &nbsp;Verify Signature on Basescan ↗
+      </a>
+    </div>
+  </div>
+
+  <!-- Input Card -->
+  <div class="card card-anim">
+    <div class="card-title">
+      <div class="card-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      </div>
+      System Parameters
+    </div>
+
+    <!-- Phase -->
+    <label style="margin-bottom:10px;">System Type</label>
+    <div class="phase-grid">
+      <button class="phase-btn active" id="ph3" onclick="setPhase(3)">
+        <span class="phase-icon">⚡⚡⚡</span>
+        <span class="phase-name">3-Phase</span>
+        <span class="phase-volt">380V / 400V / 415V</span>
+      </button>
+      <button class="phase-btn" id="ph1" onclick="setPhase(1)">
+        <span class="phase-icon">⚡</span>
+        <span class="phase-name">Single Phase</span>
+        <span class="phase-volt">220V / 230V / 240V</span>
+      </button>
+    </div>
+
+    <!-- Voltage + Current -->
+    <div class="two-col">
+      <div class="field">
+        <label id="voltLabel">Supply Voltage</label>
+        <div class="input-wrap">
+          <input type="number" id="voltInput" value="400" min="100" max="1000"/>
+          <span class="input-unit">V</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Total Current Consumed</label>
+        <div class="input-wrap">
+          <input type="number" id="ampInput" placeholder="e.g. 120" min="0.1" max="100000" step="0.1"/>
+          <span class="input-unit">A</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current PF Slider -->
+    <div class="field">
+      <label>Current Power Factor (cosφ)</label>
+      <div class="pf-row">
+        <input type="range" id="pfSlider" min="0.50" max="0.99" step="0.01" value="0.75"
+               oninput="updatePF(this.value)"/>
+        <span class="pf-display" id="pfDisplay">0.75</span>
+      </div>
+    </div>
+
+    <!-- Target PF Slider -->
+    <div class="field">
+      <label>Target Power Factor (cosφ target)</label>
+      <div class="target-row">
+        <input type="range" id="targetPfSlider" min="0.90" max="1.00" step="0.01" value="0.95"
+               oninput="updateTargetPF(this.value)"/>
+        <span class="target-display" id="targetPfDisplay">0.95</span>
+      </div>
+    </div>
+
+    <div class="divider" data-label="CAPACITOR BANK SPECS"></div>
+
+    <!-- Capacitor kVAR + quantity -->
+    <div class="two-col">
+      <div class="field">
+        <label>Each Capacitor Rating</label>
+        <div class="input-wrap">
+          <input type="number" id="capKvar" placeholder="e.g. 5" min="0.1" max="10000" step="0.1"/>
+          <span class="input-unit">kVAR</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Capacitors per Bank</label>
+        <div class="input-wrap">
+          <input type="number" id="capsPerBank" value="2" min="1" max="20"/>
+          <span class="input-unit">caps</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calculate -->
+    <button id="calcBtn" onclick="calculate()">
+      <span class="btn-inner" id="btnInner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        CALCULATE PFC
+      </span>
+    </button>
+  </div>
+
+  <!-- Result Card -->
+  <div class="card" id="resultCard">
+    <div class="result-header">Correction Results</div>
+
+    <!-- Hero: number of banks -->
+    <div class="hero-result">
+      <div class="hero-bg-text" id="heroBgText">0</div>
+      <div class="hero-label">Capacitor Banks Required</div>
+      <div class="hero-banks" id="heroBanks">—<span>banks</span></div>
+      <div class="hero-sub" id="heroSub"></div>
+    </div>
+
+    <!-- Capacitor visual -->
+    <div class="cap-visual" id="capVisual"></div>
+
+    <!-- Metrics grid -->
+    <div class="results-grid">
+      <div class="res-box cyan">
+        <div class="res-label">Total kVAR Needed</div>
+        <div class="res-value" id="rKvar">—</div>
+        <div class="res-unit">kVAR</div>
+      </div>
+      <div class="res-box orange">
+        <div class="res-label">Total Capacitors</div>
+        <div class="res-value" id="rTotalCaps">—</div>
+        <div class="res-unit">capacitors</div>
+      </div>
+      <div class="res-box purple">
+        <div class="res-label">Active Power (kW)</div>
+        <div class="res-value" id="rKw">—</div>
+        <div class="res-unit">kW</div>
+      </div>
+      <div class="res-box yellow">
+        <div class="res-label">New Power Factor</div>
+        <div class="res-value" id="rNewPf">—</div>
+        <div class="res-unit">cosφ (after correction)</div>
+      </div>
+      <div class="res-box cyan full">
+        <div class="res-label">Apparent Power (kVA)</div>
+        <div class="res-value" id="rKva">—</div>
+        <div class="res-unit">kVA before correction</div>
+      </div>
+    </div>
+
+    <!-- Step by step breakdown -->
+    <div class="breakdown">
+      <div class="breakdown-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 11l3 3L22 4"/></svg>
+        Step-by-Step Calculation
+      </div>
+      <div class="step-row">
+        <span class="step-label">Apparent Power S = V × I</span>
+        <span class="step-value" id="sKva">—</span>
+      </div>
+      <div class="step-row">
+        <span class="step-label">Active Power P = S × cosφ</span>
+        <span class="step-value" id="sKw">—</span>
+      </div>
+      <div class="step-row">
+        <span class="step-label">Reactive Power Q₁ = P × tanφ₁</span>
+        <span class="step-value" id="sQ1">—</span>
+      </div>
+      <div class="step-row">
+        <span class="step-label">Target Reactive Q₂ = P × tanφ₂</span>
+        <span class="step-value" id="sQ2">—</span>
+      </div>
+      <div class="step-row">
+        <span class="step-label">Required Qc = Q₁ − Q₂</span>
+        <span class="step-value hi" id="sQc">—</span>
+      </div>
+      <div class="step-row">
+        <span class="step-label">kVAR per bank = caps × cap rating</span>
+        <span class="step-value" id="sPerBank">—</span>
+      </div>
+      <div class="step-row">
+        <span class="step-label">Banks needed = Qc ÷ kVAR/bank</span>
+        <span class="step-value hi" id="sBanks">—</span>
+      </div>
+    </div>
+
+    <div class="warn-box">
+      <span class="warn-icon">⚠️</span>
+      <span id="warnMsg">Always verify with a licensed electrical engineer. Capacitor bank selection must account for harmonic distortion, detuning reactors, and local utility requirements.</span>
+    </div>
+
+    <div class="tx-badge" id="txBadge"></div>
+  </div>
+
+  <!-- Owner Section -->
+  <div class="owner-section">
+    <div class="owner-row">
+      <div class="owner-icon">🔐</div>
+      <div class="owner-text">
+        <div class="ok">Contract Owner · Verified on Basescan</div>
+        <div class="ov">0x8731F248c8F810168C1b58675609667F3bf8476A</div>
+        <a class="basescan-link" href="https://basescan.org/address/0x8731F248c8F810168C1b58675609667F3bf8476A" target="_blank" rel="noopener">
+          View on Basescan ↗
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built on <span>Base</span> · Powered by <span>Ethers.js v6</span><br/>
+    <span>PFCBase · Power Factor Correction for Engineers</span>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── CONFIG ────────────────────────────────────────
+  const CONTRACT_ADDRESS = ""; // ← paste after deploying PFCCalculator.sol
+  const OWNER_WALLET     = "0x8731F248c8F810168C1b58675609667F3bf8476A";
+  const BASE_CHAIN_ID    = "0x2105";
+
+  const ABI = [
+    "function calculate(uint256 voltageV, uint256 currentAx100, uint256 pfX100, uint256 targetPfX100, uint256 capKvarX100, uint256 capsPerBank) external returns (uint256 qcKvarX100, uint256 banksNeeded, uint256 totalCaps)",
+    "function owner() view returns (address)",
+    "event PFCCalculated(address indexed user, uint256 voltageV, uint256 currentAx100, uint256 pfX100, uint256 targetPfX100, uint256 qcKvarX100, uint256 banksNeeded)"
+  ];
+
+  // ── State ─────────────────────────────────────────
+  let provider, signer, contract;
+  let phaseMode = 3;
+
+  // ── Slider updates ────────────────────────────────
+  function updatePF(v) {
+    document.getElementById('pfDisplay').textContent = parseFloat(v).toFixed(2);
+    const pct = ((v - 0.50) / (0.99 - 0.50)) * 100;
+    document.getElementById('pfSlider').style.background =
+      `linear-gradient(90deg, var(--accent) ${pct}%, var(--border) ${pct}%)`;
+  }
+
+  function updateTargetPF(v) {
+    document.getElementById('targetPfDisplay').textContent = parseFloat(v).toFixed(2);
+    const pct = ((v - 0.90) / (1.00 - 0.90)) * 100;
+    document.getElementById('targetPfSlider').style.background =
+      `linear-gradient(90deg, var(--accent2) ${pct}%, var(--border) ${pct}%)`;
+  }
+
+  // Init sliders
+  updatePF(0.75); updateTargetPF(0.95);
+
+  // ── Phase ─────────────────────────────────────────
+  function setPhase(p) {
+    phaseMode = p;
+    document.getElementById('ph3').classList.toggle('active', p === 3);
+    document.getElementById('ph1').classList.toggle('active', p === 1);
+    document.getElementById('voltInput').value = p === 3 ? 400 : 230;
+    document.getElementById('voltLabel').textContent = p === 3 ? 'Supply Voltage (L-L)' : 'Supply Voltage';
+    document.getElementById('resultCard').style.display = 'none';
+  }
+
+  // ── Wallet ────────────────────────────────────────
+  async function connectWallet() {
+    if (!window.ethereum) { showToast('Please install MetaMask!', 'error'); return; }
+    try {
+      document.getElementById('connectBtn').disabled    = true;
+      document.getElementById('connectBtn').textContent = 'Connecting…';
+      provider = new ethers.BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      try {
+        await provider.send("wallet_switchEthereumChain", [{ chainId: BASE_CHAIN_ID }]);
+      } catch(e) {
+        if (e.code === 4902) {
+          await provider.send("wallet_addEthereumChain", [{
+            chainId: BASE_CHAIN_ID, chainName: "Base",
+            nativeCurrency: { name:"Ether", symbol:"ETH", decimals:18 },
+            rpcUrls: ["https://mainnet.base.org"],
+            blockExplorerUrls: ["https://basescan.org"]
+          }]);
+        }
+      }
+      signer = await provider.getSigner();
+      const addr = await signer.getAddress();
+      if (CONTRACT_ADDRESS) contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      document.getElementById('dot').classList.add('on');
+      const el = document.getElementById('walletAddr');
+      el.textContent = addr.slice(0,6) + '...' + addr.slice(-4);
+      el.classList.add('connected');
+      document.getElementById('connectBtn').textContent      = 'Connected ✓';
+      document.getElementById('connectBtn').style.background = 'var(--accent3)';
+      document.getElementById('connectBtn').style.color      = '#fff';
+      document.getElementById('signPanel').classList.add('visible');
+      showToast('Connected to Base! ✓', 'success');
+    } catch(e) {
+      document.getElementById('connectBtn').disabled    = false;
+      document.getElementById('connectBtn').textContent = 'Connect Wallet';
+      showToast(e.message || 'Connection failed', 'error');
+    }
+  }
+
+  // ── Sign message ──────────────────────────────────
+  async function signOwnership() {
+    if (!signer) { showToast('Connect wallet first.', 'error'); return; }
+    const btn = document.getElementById('signBtn');
+    btn.disabled = true; btn.textContent = 'Signing…';
+    try {
+      const addr    = await signer.getAddress();
+      const dappUrl = window.location.href;
+      const message = `Greeting this is power factor correction. ${dappUrl}`;
+      const signature = await signer.signMessage(message);
+      document.getElementById('sigMessage').textContent = message;
+      document.getElementById('sigWallet').textContent  = addr;
+      document.getElementById('sigHash').textContent    = signature;
+      document.getElementById('bsVerifyLink').href      = `https://basescan.org/address/${addr}`;
+      document.getElementById('sigBox').classList.add('visible');
+      showToast('Signed! ✓ Copy your signature hash.', 'success');
+      btn.textContent = '✅ Signed! Sign Again';
+      btn.disabled    = false;
+    } catch(e) {
+      btn.textContent = 'Sign Message with My Wallet';
+      btn.disabled    = false;
+      showToast(e.code === 4001 ? 'Rejected.' : (e.message || 'Sign failed'), 'error');
+    }
+  }
+
+  // ── Copy ──────────────────────────────────────────
+  function copyText(id) {
+    navigator.clipboard.writeText(document.getElementById(id).textContent)
+      .then(() => showToast('Copied! ✓', 'success'))
+      .catch(() => showToast('Copy failed.', 'error'));
+  }
+
+  // ── Main Calculation ──────────────────────────────
+  async function calculate() {
+    const volt       = parseFloat(document.getElementById('voltInput').value);
+    const amp        = parseFloat(document.getElementById('ampInput').value);
+    const pf         = parseFloat(document.getElementById('pfSlider').value);
+    const targetPf   = parseFloat(document.getElementById('targetPfSlider').value);
+    const capKvar    = parseFloat(document.getElementById('capKvar').value);
+    const capsPerBank= parseInt(document.getElementById('capsPerBank').value);
+
+    if (!volt || volt <= 0)     { showToast('Enter supply voltage.', 'error'); return; }
+    if (!amp  || amp  <= 0)     { showToast('Enter current consumed.', 'error'); return; }
+    if (!capKvar || capKvar<=0) { showToast('Enter capacitor kVAR rating.', 'error'); return; }
+    if (pf >= targetPf)         { showToast('Target PF must be higher than current PF.', 'error'); return; }
+    if (capsPerBank < 1)        { showToast('Capacitors per bank must be ≥ 1.', 'error'); return; }
+
+    setBtnLoading(true);
+
+    try {
+      // ── Step 1: Apparent Power ──────────────────
+      // 3-phase: S = √3 × V × I   (L-L voltage)
+      // 1-phase: S = V × I
+      let S_kva;
+      if (phaseMode === 3) {
+        S_kva = (Math.sqrt(3) * volt * amp) / 1000;
+      } else {
+        S_kva = (volt * amp) / 1000;
+      }
+
+      // ── Step 2: Active Power ────────────────────
+      const P_kw = S_kva * pf;
+
+      // ── Step 3: Reactive Power before correction
+      const phi1   = Math.acos(pf);
+      const tan1   = Math.tan(phi1);
+      const Q1_kvar = P_kw * tan1;
+
+      // ── Step 4: Reactive Power after correction ─
+      const phi2   = Math.acos(targetPf);
+      const tan2   = Math.tan(phi2);
+      const Q2_kvar = P_kw * tan2;
+
+      // ── Step 5: Required Qc ─────────────────────
+      const Qc_kvar = Q1_kvar - Q2_kvar;
+
+      if (Qc_kvar <= 0) {
+        showToast('Power factor already meets target!', 'error');
+        setBtnLoading(false); return;
+      }
+
+      // ── Step 6: Bank calculation ────────────────
+      const kvarPerBank = capKvar * capsPerBank;
+      const banksNeeded = Math.ceil(Qc_kvar / kvarPerBank);
+      const totalCaps   = banksNeeded * capsPerBank;
+      const totalKvar   = banksNeeded * kvarPerBank;
+
+      // ── New PF after installing exact banks ─────
+      const Q_new  = Q1_kvar - totalKvar;
+      const S_new  = Math.sqrt(P_kw * P_kw + Q_new * Q_new);
+      const newPf  = Math.min(1.0, P_kw / S_new);
+
+      // ── Populate UI ─────────────────────────────
+      document.getElementById('heroBanks').innerHTML   = `${banksNeeded}<span>banks</span>`;
+      document.getElementById('heroBgText').textContent = banksNeeded;
+      document.getElementById('heroSub').textContent   =
+        `${totalCaps} capacitors total · ${totalKvar.toFixed(1)} kVAR installed`;
+
+      document.getElementById('rKvar').textContent      = Qc_kvar.toFixed(2);
+      document.getElementById('rTotalCaps').textContent = totalCaps;
+      document.getElementById('rKw').textContent        = P_kw.toFixed(2);
+      document.getElementById('rNewPf').textContent     = newPf.toFixed(3);
+      document.getElementById('rKva').textContent       = S_kva.toFixed(2);
+
+      // Step by step
+      const phLabel = phaseMode === 3 ? '√3 × ' : '';
+      document.getElementById('sKva').textContent  = `${phLabel}${volt}V × ${amp}A = ${S_kva.toFixed(2)} kVA`;
+      document.getElementById('sKw').textContent   = `${S_kva.toFixed(2)} × ${pf} = ${P_kw.toFixed(2)} kW`;
+      document.getElementById('sQ1').textContent   = `${P_kw.toFixed(2)} × ${tan1.toFixed(4)} = ${Q1_kvar.toFixed(2)} kVAR`;
+      document.getElementById('sQ2').textContent   = `${P_kw.toFixed(2)} × ${tan2.toFixed(4)} = ${Q2_kvar.toFixed(2)} kVAR`;
+      document.getElementById('sQc').textContent   = `${Q1_kvar.toFixed(2)} − ${Q2_kvar.toFixed(2)} = ${Qc_kvar.toFixed(2)} kVAR`;
+      document.getElementById('sPerBank').textContent = `${capsPerBank} × ${capKvar} kVAR = ${kvarPerBank.toFixed(1)} kVAR/bank`;
+      document.getElementById('sBanks').textContent   = `${Qc_kvar.toFixed(2)} ÷ ${kvarPerBank.toFixed(1)} = ${banksNeeded} banks`;
+
+      // Capacitor visual
+      let capHtml = '';
+      for (let b = 0; b < Math.min(banksNeeded, 20); b++) {
+        capHtml += `<div class="cap-unit" style="animation-delay:${b*0.05}s">`;
+        for (let c = 0; c < capsPerBank; c++) {
+          capHtml += `<span class="cap-icon">🔋</span>`;
+        }
+        capHtml += `<span style="font-size:.6rem;opacity:.6">Bank ${b+1}</span></div>`;
+      }
+      if (banksNeeded > 20) {
+        capHtml += `<div class="cap-unit">+${banksNeeded-20} more…</div>`;
+      }
+      document.getElementById('capVisual').innerHTML = capHtml;
+
+      document.getElementById('warnMsg').textContent =
+        `Results for ${phaseMode}-phase ${volt}V system, ${amp}A load. ` +
+        `PF improved from ${pf} → ${newPf.toFixed(3)} with ${banksNeeded} bank(s). ` +
+        `Consider detuning reactors (5-7% impedance) to prevent harmonic resonance. ` +
+        `Verify capacitor ratings for operating voltage and temperature.`;
+
+      document.getElementById('resultCard').style.display = 'block';
+      document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      // On-chain tx
+      if (contract && signer) {
+        try {
+          showToast('Sending to Base…');
+          const tx = await contract.calculate(
+            Math.round(volt),
+            Math.round(amp * 100),
+            Math.round(pf * 100),
+            Math.round(targetPf * 100),
+            Math.round(capKvar * 100),
+            capsPerBank
+          );
+          const receipt = await tx.wait();
+          const badge   = document.getElementById('txBadge');
+          badge.style.display = 'block';
+          badge.innerHTML = `✓ Recorded on Base · <a href="https://basescan.org/tx/${receipt.hash}" target="_blank">View on Basescan ↗</a>`;
+          showToast('On-chain tx confirmed! ✓', 'success');
+        } catch(_) {
+          showToast('Calculated! Deploy contract for on-chain recording.', '');
+        }
+      } else {
+        showToast('Calculation complete! ✓', 'success');
+      }
+
+    } catch(e) {
+      showToast(e.message || 'Calculation error', 'error');
+    }
+
+    setBtnLoading(false);
+  }
+
+  // ── UI helpers ────────────────────────────────────
+  function setBtnLoading(on) {
+    const btn = document.getElementById('calcBtn');
+    btn.disabled = on;
+    document.getElementById('btnInner').innerHTML = on
+      ? '<span class="spinner"></span> Calculating…'
+      : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> CALCULATE PFC`;
+  }
+
+  let toastTimer;
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className   = 'show ' + (type === 'error' ? 'error' : type === 'success' ? 'success' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = ''; }, 3500);
+  }
+
+  // ── Auto-connect ──────────────────────────────────
+  window.addEventListener('load', async () => {
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) connectWallet();
+      } catch(_) {}
+    }
+  });
+</script>
+</body>
+</html>
